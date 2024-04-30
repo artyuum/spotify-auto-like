@@ -1,0 +1,18 @@
+name: spotify_auto_like
+description: A sample command-line application.
+version: 1.0.0
+# repository: https://github.com/my_org/my_repo
+
+environment:
+  sdk: ^3.3.4
+
+dependencies:
+  collection: ^1.18.0
+  http: ^1.2.1
+  login_client: ^3.1.0
+  spotify: ^0.13.6
+
+dev_dependencies:
+  lints: ^3.0.0
+  test: ^1.24.0
+  var_dump: ^0.5.0
