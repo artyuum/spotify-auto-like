@@ -1,21 +1,30 @@
 import 'dart:io';
+import 'package:cli_spin/cli_spin.dart';
 import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
 import 'package:spotify/spotify.dart';
+
+CliSpin showSpinner(String message) {
+  final spinner = CliSpin();
+
+  return spinner.start(message);
+}
 
 void main() async {
   final credentials = SpotifyApiCredentials('1679eb43d88c4c4c82e2c5d5c002de97', null);
   final grant = SpotifyApi.authorizationCodeGrant(credentials);
   final scopes = [AuthorizationScope.library.read, AuthorizationScope.library.modify];
 
+  final server = await HttpServer.bind(InternetAddress.anyIPv6, 8080);
+
   final authUri = grant.getAuthorizationUrl(
-    Uri.parse('http://localhost:8080'),
+    Uri.parse('http://localhost:${server.port}'),
     scopes: scopes,
   );
 
+  print('Please click on the authorization link below to allow access to your Spotify library: ');
   print(authUri);
 
-  final server = await HttpServer.bind(InternetAddress.anyIPv6, 8080);
   await server.forEach((HttpRequest request) async {
     final code = request.uri.queryParameters['code'];
 
@@ -37,11 +46,9 @@ void main() async {
 
     final spotify = SpotifyApi.fromAuthCodeGrant(grant, request.uri.toString());
 
-    print('Fetching the currently saved tracks...');
+    var spinner = showSpinner('Fetching all saved tracks...');
 
     final savedTracks = await spotify.tracks.me.saved.all();
-
-    print('Found ${savedTracks.length} saved tracks.');
 
     final savedTrackIds = [];
 
@@ -50,12 +57,16 @@ void main() async {
       savedTrackIds.add(item.track!.id);
     }
 
-    print('Fetching the currently saved albums...');
+    spinner.success('Found ${savedTrackIds.length} saved tracks.');
+
+    spinner = showSpinner('Fetching all saved albums...');
 
     final savedAlbums = await spotify.me.savedAlbums().all();
     final trackIdsToAdd = <String>[];
 
-    print('Looping through ${savedAlbums.length} saved albums tracks...');
+    spinner.success('Found ${savedAlbums.length} saved albums.');
+
+    spinner = showSpinner('Fetching the albums tracks...');
 
     // loops through all saved albums and check if there are some tracks missing from the saved tracks playlist
     for (var item in savedAlbums) {
@@ -72,16 +83,21 @@ void main() async {
     }
 
     if (trackIdsToAdd.isEmpty) {
-      print('No tracks to save');
-    } else {
-      print('${trackIdsToAdd.length} tracks to save.');
-
-      // the API only supports up-to 50 IDs in one request so we partition the list into chunks of 50 IDs
-      final chunks = trackIdsToAdd.slices(50);
-
-      for (var ids in chunks) {
-        await spotify.tracks.me.save(ids);
-      }
+      spinner.success('No tracks to save.');
+      return;
     }
+
+    spinner.success('Found ${trackIdsToAdd.length} tracks to save.');
+
+    // the API only supports up-to 50 IDs in one request so we partition the list into chunks of 50 IDs
+    final chunks = trackIdsToAdd.slices(50);
+
+    spinner = showSpinner('Saving the tracks...');
+
+    for (var ids in chunks) {
+      await spotify.tracks.me.save(ids);
+    }
+
+    spinner.success('${trackIdsToAdd.length} tracks successfully saved!');
   });
 }
